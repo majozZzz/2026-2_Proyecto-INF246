@@ -43,7 +43,35 @@ int thread_create(void (*func)(void)) {
 
 // Requerimiento C
 void thread_schedule(void) {
+  struct thread *t_previa = current_thread;
+  struct thread *t_siguiente = 0;
 
+  for (int offset = 1; offset <= MAX_THREADS; offset++) {
+    int id = (t_previa->id + offset) % MAX_THREADS;
+    if (all_thread[id].state == LISTA_PARA_CORRER) {
+      t_siguiente = &all_thread[id];
+      break;
+    }
+  }
+
+  if (t_siguiente == 0) {
+    if (t_previa->state == CORRIENDO)
+      return;
+    if (t_previa->state == LISTA_PARA_CORRER)
+      t_siguiente = t_previa;
+    else
+      exit(0);
+  }
+
+  t_siguiente->state = CORRIENDO;
+  current_thread = t_siguiente;
+
+  if (t_siguiente != t_previa) {
+    if (t_previa->state == CORRIENDO)
+      t_previa->state = LISTA_PARA_CORRER;
+    //esta funcion esta en codigo ensamblador, guarda el contexto actual y carga el siguiente
+    thread_switch(&t_previa->ctx, &t_siguiente->ctx);
+  }
 }
 
 // Requerimiento D
