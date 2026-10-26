@@ -19,18 +19,11 @@ static void thread_work(void) {
 int main(void) {
   thread_init();
   int n = 3;
-  int threads[3];
   for (int i = 0; i < n; i++){
-    threads[i] = thread_create(thread_work);
+    thread_create(thread_work);
   }
 
   thread_schedule();
-
-  for (int i = 0; i < n; i++){
-    while (all_thread[threads[i]].state != LIBRE){
-      thread_yield();
-    }
-  }
 
   printf("\ntest completado\n");
   exit(0);

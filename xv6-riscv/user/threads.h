@@ -9,7 +9,8 @@
 enum thread_state {
   LIBRE = 0,
   LISTA_PARA_CORRER,
-  CORRIENDO
+  CORRIENDO,
+  ESPERANDO
 };
 
 struct context {
