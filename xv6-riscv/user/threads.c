@@ -57,8 +57,6 @@ void thread_schedule(void) {
   if (t_siguiente == 0) {
     if (t_previa->state == CORRIENDO)
       return;
-    if (t_previa->state == LISTA_PARA_CORRER)
-      t_siguiente = t_previa;
     else if (all_thread[0].state == ESPERANDO)
       t_siguiente = &all_thread[0];
     else
