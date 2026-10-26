@@ -70,7 +70,7 @@ void thread_schedule(void) {
 
   if (t_siguiente != t_previa) {
     if (t_previa->state == CORRIENDO)
-      t_previa->state = ESPERANDO;
+      t_previa->state = (t_previa->id == 0) ? ESPERANDO : LISTA_PARA_CORRER;
     //esta funcion esta en codigo ensamblador, guarda el contexto actual y carga el siguiente
     thread_switch(&t_previa->ctx, &t_siguiente->ctx);
   }
