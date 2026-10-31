@@ -116,6 +116,14 @@ $U/_forktest: $U/forktest.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o
 	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
 
+$U/_threadtest: $U/test_threads.o $U/threads.o $U/thread_switch.o $(ULIB) $U/user.ld
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $U/test_threads.o $U/threads.o $U/thread_switch.o $(ULIB)
+	$(OBJDUMP) -S $@ > $U/threadtest.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $U/threadtest.sym
+
+$U/thread_switch.o: $U/thread_switch.S
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 	gcc -Wno-unknown-attributes -I. -o mkfs/mkfs mkfs/mkfs.c
 
@@ -148,6 +156,7 @@ UPROGS=\
 	$U/_sync\
 	$U/_find\
 	$U/_primes\
+	$U/_threadtest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
