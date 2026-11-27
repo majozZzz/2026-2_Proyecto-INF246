@@ -23,20 +23,30 @@ struct {
   struct run *freelist;
 } kmem;
 
+#define PGIDX(pa) (((uint64)(pa)) / PGSIZE)
+
+struct {
+  struct spinlock lock;
+  int cnt[PHYSTOP / PGSIZE];
+} pgref;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  freerange(end, (void *)PHYSTOP);
+  initlock(&pgref.lock, "pgref");
+  freerange(end, (void*)PHYSTOP);
 }
 
 void
 freerange(void *pa_start, void *pa_end)
 {
   char *p;
-  p = (char *)PGROUNDUP((uint64)pa_start);
-  for (; p + PGSIZE <= (char *)pa_end; p += PGSIZE)
+  p = (char*)PGROUNDUP((uint64)pa_start);
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
+    pgref.cnt[PGIDX(p)] = 1;
     kfree(p);
+  }
 }
 
 // Free the page of physical memory pointed at by pa,
@@ -48,13 +58,23 @@ kfree(void *pa)
 {
   struct run *r;
 
-  if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end || (uint64)pa >= PHYSTOP)
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+
+  acquire(&pgref.lock);
+  if(pgref.cnt[PGIDX(pa)] < 1)
+    panic("kfree: refcnt");
+  pgref.cnt[PGIDX(pa)]--;
+  if(pgref.cnt[PGIDX(pa)] > 0){
+    release(&pgref.lock);
+    return;
+  }
+  release(&pgref.lock);
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
-  r = (struct run *)pa;
+  r = (struct run*)pa;
 
   acquire(&kmem.lock);
   r->next = kmem.freelist;
@@ -72,11 +92,51 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if (r)
+  if(r)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if (r)
-    memset((char *)r, 5, PGSIZE); // fill with junk
-  return (void *)r;
+  if(r){
+    memset((char*)r, 5, PGSIZE); // fill with junk
+    acquire(&pgref.lock);
+    pgref.cnt[PGIDX(r)] = 1;
+    release(&pgref.lock);
+  }
+  return (void*)r;
+}
+
+
+void
+krefinc(void *pa)
+{
+  acquire(&pgref.lock);
+  if(pgref.cnt[PGIDX(pa)] < 1)
+    panic("krefinc");
+  pgref.cnt[PGIDX(pa)]++;
+  release(&pgref.lock);
+}
+
+int
+krefget(void *pa)
+{
+  int n;
+
+  acquire(&pgref.lock);
+  n = pgref.cnt[PGIDX(pa)];
+  release(&pgref.lock);
+  return n;
+}
+
+
+int
+kcountfree(void)
+{
+  int n = 0;
+  struct run *r;
+
+  acquire(&kmem.lock);
+  for(r = kmem.freelist; r; r = r->next)
+    n++;
+  release(&kmem.lock);
+  return n;
 }
