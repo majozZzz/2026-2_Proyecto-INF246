@@ -44,8 +44,6 @@ freerange(void *pa_start, void *pa_end)
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
-    // kfree decrementa el contador; se inicia en 1 para que llegue
-    // a 0 y la pagina entre de verdad a la lista libre.
     pgref.cnt[PGIDX(p)] = 1;
     kfree(p);
   }
@@ -68,7 +66,6 @@ kfree(void *pa)
     panic("kfree: refcnt");
   pgref.cnt[PGIDX(pa)]--;
   if(pgref.cnt[PGIDX(pa)] > 0){
-    // todavia hay otros procesos usando esta pagina
     release(&pgref.lock);
     return;
   }
@@ -102,14 +99,13 @@ kalloc(void)
   if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
     acquire(&pgref.lock);
-    pgref.cnt[PGIDX(r)] = 1;     // un unico dueno al nacer
+    pgref.cnt[PGIDX(r)] = 1;
     release(&pgref.lock);
   }
   return (void*)r;
 }
 
-// Incrementa el contador de referencias de la pagina pa
-// (una referencia mas, por ejemplo en uvmcopy durante fork).
+
 void
 krefinc(void *pa)
 {
@@ -120,7 +116,6 @@ krefinc(void *pa)
   release(&pgref.lock);
 }
 
-// Devuelve el contador de referencias actual de la pagina pa.
 int
 krefget(void *pa)
 {
@@ -132,8 +127,7 @@ krefget(void *pa)
   return n;
 }
 
-// Opcional (depuracion): cuenta las paginas libres.
-// Util para detectar fugas llamandola desde procdump (Ctrl-P).
+
 int
 kcountfree(void)
 {

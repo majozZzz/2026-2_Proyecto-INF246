@@ -311,9 +311,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       flags = (flags & ~PTE_W) | PTE_COW;
       *pte = PA2PTE(pa) | flags;
     }
-    // hola, comente esta llamada a krefinc por mientras, es parte del requerimiento B
-    // cuando lo tengan implementado, descomentarla y probar que funcione 
-    //krefinc((void *)pa);
+
+    krefinc((void *)pa);
     if (mappages(new, i, PGSIZE, pa, flags) != 0) {
       kfree((void *)pa);
       goto err;
