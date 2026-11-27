@@ -157,6 +157,7 @@ UPROGS=\
 	$U/_find\
 	$U/_primes\
 	$U/_threadtest\
+	$U/_cowtest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

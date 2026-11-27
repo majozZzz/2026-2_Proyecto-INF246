@@ -362,6 +362,12 @@ copyout(pagetable_t pagetable, uint64 psz, uint64 dstva, char *src, uint64 len)
     }
 
     pte = walk(pagetable, va0, 0);
+    // si la pagina es COW, resolver la copia antes de escribir.
+    if (*pte & PTE_COW) {
+      if (cowfault(pagetable, va0) < 0)
+        return -1;
+      pa0 = PTE2PA(*pte); // la pagina fisica pudo cambiar
+    }
     // forbid copyout over read-only user text pages.
     if ((*pte & PTE_W) == 0)
       return -1;
@@ -477,6 +483,49 @@ vmfault(pagetable_t pagetable, uint64 psz, uint64 va, int read)
     return 0;
   }
   return mem;
+}
+
+// Resuelve un fallo de escritura sobre una pagina copy-on-write.
+// Si la pagina ya no esta compartida, solo restaura el permiso de
+// escritura; si lo esta, copia los datos a una pagina nueva y suelta
+// la referencia a la original.
+// Retorna 0 si se resolvio, -1 si va no es una pagina COW de usuario
+// o si no hay memoria disponible.
+int
+cowfault(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte;
+  uint64 pa;
+  uint flags;
+  char *mem;
+
+  if (va >= MAXVA)
+    return -1;
+  va = PGROUNDDOWN(va);
+  pte = walk(pagetable, va, 0);
+  if (pte == 0)
+    return -1;
+  if ((*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_COW) == 0)
+    return -1;
+
+  pa = PTE2PA(*pte);
+  flags = (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+
+  if (krefget((void *)pa) == 1) {
+    // unico dueno: no hace falta copiar.
+    *pte = PA2PTE(pa) | flags;
+    sfence_vma();
+    return 0;
+  }
+
+  mem = kalloc();
+  if (mem == 0)
+    return -1;
+  memmove(mem, (void *)pa, PGSIZE);
+  *pte = PA2PTE((uint64)mem) | flags;
+  kfree((void *)pa); // una referencia menos a la pagina original
+  sfence_vma();
+  return 0;
 }
 
 int
